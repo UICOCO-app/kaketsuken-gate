@@ -25,6 +25,15 @@ interface FilterModes {
   program: FilterMode;
 }
 
+// セクション開閉状態の型定義を追加
+interface OpenSections {
+  field: boolean;
+  keyword: boolean;
+  keytechnology: boolean;
+  program: boolean;
+  [key: string]: boolean; // インデックスシグネチャを追加
+}
+
 // プロパティの型定義 - 既存のAPIと互換性を維持
 interface FilterPanelProps {
   researchers: Researcher[];
@@ -55,8 +64,8 @@ export default function FilterPanel({ researchers, onFilterChange }: FilterPanel
     program: "OR"
   });
   
-  // 開閉状態の管理
-  const [openSections, setOpenSections] = useState({
+  // 開閉状態の管理 - OpenSections型を適用
+  const [openSections, setOpenSections] = useState<OpenSections>({
     field: false,
     keyword: false,
     keytechnology: false,
