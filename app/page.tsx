@@ -1,101 +1,142 @@
-import Image from "next/image";
+"use client";
+
+import React, { useState, useEffect } from "react";
+import NetworkVisualization from "@/components/NetworkVisualization";
+import FilterPanel from "@/components/FilterPanel";
+import ResearcherDetailPanel from "@/components/ResearcherDetailPanel";
+import { loadResearchersData, filterResearchers, Researcher } from "@/lib/utils";
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  // 研究者データの状態
+  const [researchers, setResearchers] = useState<Researcher[]>([]);
+  const [filteredResearchers, setFilteredResearchers] = useState<Researcher[]>([]);
+  const [selectedResearcherId, setSelectedResearcherId] = useState<string | null>(null);
+  const [relatedResearchers, setRelatedResearchers] = useState<Researcher[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+  // データの読み込み
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        setIsLoading(true);
+        const data = await loadResearchersData();
+        setResearchers(data);
+        setFilteredResearchers(data);
+      } catch (error) {
+        console.error("Failed to load researcher data:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    fetchData();
+  }, []);
+
+  // 研究者を選択したときの処理
+  const handleSelectResearcher = (id: string) => {
+    setSelectedResearcherId(id);
+    
+    // 関連研究者を計算
+    const selectedResearcher = filteredResearchers.find(r => r.id === id);
+    if (!selectedResearcher || !selectedResearcher.connections) {
+      setRelatedResearchers([]);
+      return;
+    }
+
+    // 接続スコアが高い順に関連研究者を取得
+    const relatedIds = selectedResearcher.connections
+      .sort((a, b) => b.score - a.score)
+      .map(c => c.id);
+      
+    const related = relatedIds
+      .map(id => filteredResearchers.find(r => r.id === id))
+      .filter((r): r is Researcher => r !== undefined);
+      
+    setRelatedResearchers(related);
+  };
+
+  // フィルター変更時の処理
+  const handleFilterChange = (filters: {
+    field?: string;
+    keyword?: string;
+    keytechnology?: string;
+    program?: string;
+    theme?: string;
+    affiliation?: string;
+  }) => {
+    const filtered = filterResearchers(researchers, filters);
+    setFilteredResearchers(filtered);
+    
+    // 選択中の研究者がフィルター後にも存在するか確認
+    if (selectedResearcherId && !filtered.some(r => r.id === selectedResearcherId)) {
+      setSelectedResearcherId(null);
+      setRelatedResearchers([]);
+    } else if (selectedResearcherId) {
+      // 関連研究者を再計算
+      handleSelectResearcher(selectedResearcherId);
+    }
+  };
+
+  // 選択中の研究者を取得
+  const selectedResearcher = selectedResearcherId
+    ? filteredResearchers.find(r => r.id === selectedResearcherId) || null
+    : null;
+
+  // フィルタリング結果が空かどうかを判定
+  const hasNoResults = filteredResearchers.length === 0;
+
+  return (
+    <main className="min-h-screen p-4">
+      <div className="container mx-auto">
+        <h1 className="text-2xl font-bold text-center mb-4">KaketsukenGate</h1>
+        <p className="text-center mb-8">研究者ネットワーク可視化アプリ</p>
+
+        {isLoading ? (
+          <div className="flex justify-center items-center h-64">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {/* フィルターパネル */}
+            <div className="md:col-span-1">
+              <FilterPanel
+                researchers={researchers}
+                onFilterChange={handleFilterChange}
+              />
+            </div>
+
+            {/* メインコンテンツ */}
+            <div className="md:col-span-3 space-y-4">
+              {/* ネットワーク可視化 */}
+              <div className="h-[500px]">
+                {hasNoResults ? (
+                  <div className="w-full border rounded-md bg-gray-50 flex items-center justify-center h-full">
+                    <div className="text-center p-8">
+                      <p className="text-xl font-medium text-gray-500 mb-2">該当する研究者がいません</p>
+                      <p className="text-sm text-gray-400">フィルター条件を変更してください</p>
+                    </div>
+                  </div>
+                ) : (
+                  <NetworkVisualization
+                    researchers={filteredResearchers}
+                    selectedResearcherId={selectedResearcherId}
+                    onSelectResearcher={handleSelectResearcher}
+                  />
+                )}
+              </div>
+
+              {/* 研究者詳細 */}
+              <div className="h-[400px]">
+                <ResearcherDetailPanel
+                  researcher={selectedResearcher}
+                  relatedResearchers={relatedResearchers}
+                  onSelectResearcher={handleSelectResearcher}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </main>
   );
 }
