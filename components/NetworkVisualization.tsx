@@ -258,7 +258,7 @@ export default function NetworkVisualization({
         const testLine = currentLine + char;
         
         tempText.text(testLine);
-        const testWidth = tempText.node().getComputedTextLength() : 0;
+        const testWidth = tempText.node()?.getComputedTextLength() ?? 0;
         
         if (testWidth > maxWidth && currentLine !== "") {
           lines.push(currentLine);
@@ -269,7 +269,7 @@ export default function NetworkVisualization({
             // 残りの文字が最大幅に収まるか確認
             const remainingText = words.slice(i).join('');
             tempText.text(remainingText);
-            const remainingWidth = tempText.node()..getComputedTextLength() : 0;
+            const remainingWidth = tempText.node()?.getComputedTextLength() ?? 0;
             
             if (remainingWidth > maxWidth) {
               // 最後の行を省略して「...」を追加
