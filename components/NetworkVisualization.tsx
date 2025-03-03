@@ -234,7 +234,7 @@ export default function NetworkVisualization({
       });
 
     // 所属テキストを折り返して表示する関数
-    function updateAffiliation(group, text) {
+    function updateAffiliation(group: d3.Selection<any, unknown, null, undefined>, text: string) {
       // 既存のテキスト要素をクリア
       group.selectAll("*").remove();
       
