@@ -75,7 +75,7 @@ export default function ResearcherDetailPanel({
           </div>
           {onClose && (
             <Button
-              variant="ghost"
+              variant="outline" // ここを変更
               size="icon"
               className="ml-auto"
               onClick={onClose}
