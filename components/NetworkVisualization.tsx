@@ -141,7 +141,7 @@ export default function NetworkVisualization({
       .on("click", () => {
         // 選択解除して親コンポーネントに通知
         if (selectedResearcherId) {
-          onSelectResearcher(null);
+          onSelectResearcher("");
         }
       });
 
