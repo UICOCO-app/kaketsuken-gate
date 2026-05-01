@@ -1,355 +1,178 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
-import { Button } from "./ui/button";
-import { Researcher, getUniqueValues, splitByDelimiters } from "../lib/utils";
-import { ChevronDown, ChevronRight } from "lucide-react"; // アイコン用
+import React, { useState } from "react";
+import { Researcher, FilterState, getUniqueValues, extractAllEvents } from "../lib/utils";
 
-// フィルターモード型定義
-type FilterMode = "AND" | "OR";
-
-// FilterOptionタイプ（内部用）
-interface FilterOption {
-  field: string[];
-  keyword: string[];
-  keytechnology: string[];
-  program: string[];
-}
-
-// フィルターモード（内部用）
-interface FilterModes {
-  field: FilterMode;
-  keyword: FilterMode;
-  keytechnology: FilterMode;
-  program: FilterMode;
-}
-
-// セクション開閉状態の型定義を追加
-interface OpenSections {
-  field: boolean;
-  keyword: boolean;
-  keytechnology: boolean;
-  program: boolean;
-  [key: string]: boolean; // インデックスシグネチャを追加
-}
-
-// プロパティの型定義 - 既存のAPIと互換性を維持
 interface FilterPanelProps {
   researchers: Researcher[];
-  onFilterChange: (filters: {
-    field?: string;
-    keyword?: string;
-    keytechnology?: string;
-    program?: string;
-    theme?: string;
-    affiliation?: string;
-  }) => void;
+  filters: FilterState;
+  onFilterChange: (filters: FilterState) => void;
 }
 
-export default function FilterPanel({ researchers, onFilterChange }: FilterPanelProps) {
-  // 複数選択フィルター（内部状態）
-  const [multiFilters, setMultiFilters] = useState<FilterOption>({
-    field: [],
-    keyword: [],
-    keytechnology: [],
-    program: []
-  });
-  
-  // フィルターモード（AND/OR）
-  const [filterModes, setFilterModes] = useState<FilterModes>({
-    field: "OR",
-    keyword: "OR",
-    keytechnology: "OR",
-    program: "OR"
-  });
-  
-  // 開閉状態の管理 - OpenSections型を適用
-  const [openSections, setOpenSections] = useState<OpenSections>({
-    field: false,
-    keyword: false,
-    keytechnology: false,
-    program: false
-  });
-  
-  // テキスト検索（内部状態）
-  const [searchText, setSearchText] = useState("");
-  
-  // 従来のAPIと互換性を持つフィルター状態（単一選択のみ）
-  const [filters, setFilters] = useState({
-    field: "",
-    keyword: "",
-    keytechnology: "",
-    program: ""
-  });
+interface FilterSectionProps {
+  title: string;
+  options: string[];
+  selected: string[];
+  mode: "AND" | "OR";
+  onSelectionChange: (selected: string[]) => void;
+  onModeChange: (mode: "AND" | "OR") => void;
+}
 
-  // ユニークな値のリストを取得
-  const fieldOptions = ["", ...getUniqueValues(researchers, "field")].filter(v => v.trim() !== "");
-  const keywordOptions = ["", ...getUniqueValues(researchers, "keywords")].filter(v => v.trim() !== "");
-  const technologyOptions = ["", ...getUniqueValues(researchers, "keytechnology")].filter(v => v.trim() !== "");
-  const programOptions = ["", ...getUniqueValues(researchers, "program")].filter(v => v.trim() !== "");
+function FilterSection({
+  title,
+  options,
+  selected,
+  mode,
+  onSelectionChange,
+  onModeChange,
+}: FilterSectionProps) {
+  const [isOpen, setIsOpen] = useState(false);
 
-  // フィルターのリセット
-  const resetFilters = () => {
-    setMultiFilters({
-      field: [],
-      keyword: [],
-      keytechnology: [],
-      program: []
-    });
-    setFilters({
-      field: "",
-      keyword: "",
-      keytechnology: "",
-      program: ""
-    });
-    setSearchText("");
-    onFilterChange({});
+  const toggleOption = (option: string) => {
+    if (selected.includes(option)) {
+      onSelectionChange(selected.filter((s) => s !== option));
+    } else {
+      onSelectionChange([...selected, option]);
+    }
   };
 
-  // セクションの開閉を切り替える
-  const toggleSection = (section: string) => {
-    setOpenSections(prev => ({
-      ...prev,
-      [section]: !prev[section]
-    }));
-  };
+  return (
+    <div className="mb-2 border rounded-md overflow-hidden">
+      <button
+        className="w-full flex justify-between items-center p-2 bg-gray-50 hover:bg-gray-100"
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <span className="font-medium text-sm">
+          {title}
+          {selected.length > 0 && (
+            <span className="ml-1 text-blue-600">({selected.length})</span>
+          )}
+        </span>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 text-xs">
+            <label className="flex items-center gap-0.5 cursor-pointer">
+              <input
+                type="radio"
+                checked={mode === "AND"}
+                onChange={() => onModeChange("AND")}
+                onClick={(e) => e.stopPropagation()}
+                className="w-3 h-3"
+              />
+              AND
+            </label>
+            <label className="flex items-center gap-0.5 cursor-pointer">
+              <input
+                type="radio"
+                checked={mode === "OR"}
+                onChange={() => onModeChange("OR")}
+                onClick={(e) => e.stopPropagation()}
+                className="w-3 h-3"
+              />
+              OR
+            </label>
+          </div>
+          <span>{isOpen ? "▲" : "▼"}</span>
+        </div>
+      </button>
 
-  // 内部フィルタリングを行い、結果を従来のAPI形式に変換して親に通知
-  useEffect(() => {
-    // 複数選択からAND/ORロジックで単一の文字列フィルターを生成
-    const convertToLegacyFilter = () => {
-      // マルチフィルターが選択されていない場合は空文字を返す
-      // 選択されている場合は、AND/ORロジックに基づいてパイプで区切った文字列を返す
-      const fieldValue = multiFilters.field.length > 0 
-        ? (filterModes.field === "AND" ? `AND:${multiFilters.field.join("|")}` : multiFilters.field.join("|")) 
-        : "";
-      
-      const keywordValue = multiFilters.keyword.length > 0 
-        ? (filterModes.keyword === "AND" ? `AND:${multiFilters.keyword.join("|")}` : multiFilters.keyword.join("|")) 
-        : "";
-      
-      const keytechnologyValue = multiFilters.keytechnology.length > 0 
-        ? (filterModes.keytechnology === "AND" ? `AND:${multiFilters.keytechnology.join("|")}` : multiFilters.keytechnology.join("|")) 
-        : "";
-      
-      const programValue = multiFilters.program.length > 0 
-        ? (filterModes.program === "AND" ? `AND:${multiFilters.program.join("|")}` : multiFilters.program.join("|")) 
-        : "";
-
-      return {
-        field: fieldValue,
-        keyword: keywordValue,
-        keytechnology: keytechnologyValue,
-        program: programValue,
-        // 検索テキストがある場合は、ここで検索対象としてthemeとaffiliationも追加
-        ...(searchText ? { theme: searchText, affiliation: searchText } : {})
-      };
-    };
-
-    // 従来のAPIとの互換性を維持するフィルター形式に変換
-    const legacyFilters = convertToLegacyFilter();
-    
-    // フィルターをクリーンアップ (空の値を削除)
-    const cleanFilters = Object.fromEntries(
-      Object.entries(legacyFilters).filter(([_, v]) => v !== "")
-    );
-    
-    // 親コンポーネントにフィルター変更を通知
-    onFilterChange(cleanFilters);
-  }, [multiFilters, filterModes, searchText, researchers]);
-
-  // チェックボックスの変更ハンドラー関数
-  const handleMultiFilterChange = (
-    field: keyof FilterOption,
-    option: string
-  ) => {
-    setMultiFilters(prev => {
-      const current = [...prev[field]];
-      
-      if (current.includes(option)) {
-        // 既に選択されている場合は削除
-        return {
-          ...prev,
-          [field]: current.filter(item => item !== option)
-        };
-      } else {
-        // 選択されていない場合は追加
-        return {
-          ...prev,
-          [field]: [...current, option]
-        };
-      }
-    });
-  };
-
-  // フィルターモードの変更ハンドラー関数
-  const handleModeChange = (
-    field: keyof FilterModes,
-    mode: FilterMode
-  ) => {
-    setFilterModes(prev => ({
-      ...prev,
-      [field]: mode
-    }));
-  };
-
-  // 選択項目数のバッジを表示
-  const renderBadge = (count: number) => {
-    if (count === 0) return null;
-    return (
-      <span className="ml-2 bg-blue-100 text-blue-800 text-xs font-medium px-2 py-0.5 rounded-full">
-        {count}
-      </span>
-    );
-  };
-
-  // アコーディオンヘッダー
-  const renderAccordionHeader = (
-    title: string, 
-    filterKey: keyof FilterOption, 
-    isOpen: boolean
-  ) => (
-    <div 
-      className="flex items-center justify-between py-2 px-3 bg-gray-50 rounded-md cursor-pointer"
-      onClick={() => toggleSection(filterKey)}
-    >
-      <div className="flex items-center">
-        {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-        <span className="ml-1 font-medium">{title}</span>
-        {renderBadge(multiFilters[filterKey].length)}
-      </div>
-      
-      <div className="flex space-x-2 text-xs">
-        <label className="flex items-center">
-          <input
-            type="radio"
-            name={`mode-${filterKey}`}
-            checked={filterModes[filterKey] === "AND"}
-            onChange={() => handleModeChange(filterKey, "AND")}
-            className="mr-1"
-            onClick={(e) => e.stopPropagation()}
-          />
-          AND
-        </label>
-        <label className="flex items-center">
-          <input
-            type="radio"
-            name={`mode-${filterKey}`}
-            checked={filterModes[filterKey] === "OR"}
-            onChange={() => handleModeChange(filterKey, "OR")}
-            className="mr-1"
-            onClick={(e) => e.stopPropagation()}
-          />
-          OR
-        </label>
-      </div>
-    </div>
-  );
-
-  // フィルターセクションのレンダリング
-  const renderFilterSection = (
-    title: string,
-    filterKey: keyof FilterOption,
-    options: string[]
-  ) => (
-    <div className="mb-3">
-      {renderAccordionHeader(title, filterKey, openSections[filterKey])}
-      
-      {openSections[filterKey] && (
-        <div className="max-h-32 overflow-y-auto pl-2 space-y-1 text-sm mt-2 border rounded-md p-2">
-          {options.map((option, index) => (
-            option && (
-              <div key={index} className="flex items-center">
-                <input
-                  type="checkbox"
-                  id={`${filterKey}-${index}`}
-                  checked={multiFilters[filterKey].includes(option)}
-                  onChange={() => handleMultiFilterChange(filterKey, option)}
-                  className="mr-2"
-                />
-                <label htmlFor={`${filterKey}-${index}`} className="cursor-pointer truncate">
-                  {option}
-                </label>
-              </div>
-            )
+      {isOpen && (
+        <div className="p-2 max-h-40 overflow-y-auto">
+          {options.map((option) => (
+            <label
+              key={option}
+              className="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50"
+            >
+              <input
+                type="checkbox"
+                checked={selected.includes(option)}
+                onChange={() => toggleOption(option)}
+                className="w-3 h-3"
+              />
+              <span className="text-sm">{option}</span>
+            </label>
           ))}
         </div>
       )}
     </div>
   );
+}
 
-  // 選択中のフィルター数を集計
-  const totalSelectedFilters = Object.values(multiFilters).reduce(
-    (sum, items) => sum + items.length, 
-    0
-  );
+export default function FilterPanel({
+  researchers,
+  filters,
+  onFilterChange,
+}: FilterPanelProps) {
+  const allEvents = extractAllEvents(researchers);
+
+  const updateFilter = (key: keyof FilterState, value: unknown) => {
+    onFilterChange({ ...filters, [key]: value });
+  };
 
   return (
-    <Card className="w-full">
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <CardTitle>フィルター</CardTitle>
-          {totalSelectedFilters > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={resetFilters}
-            >
-              リセット
-            </Button>
-          )}
+    <div className="p-3 bg-white rounded-lg shadow">
+      <h2 className="text-lg font-bold mb-3">フィルター</h2>
+
+      <input
+        type="text"
+        placeholder="名前・テーマ・所属で検索..."
+        value={filters.search}
+        onChange={(e) => updateFilter("search", e.target.value)}
+        className="w-full p-2 mb-3 border rounded-md text-sm"
+      />
+
+      {allEvents.length > 0 && (
+        <div className="mb-3">
+          <label className="block text-sm font-medium mb-1">イベント参加</label>
+          <select
+            value={filters.selectedEvent}
+            onChange={(e) => updateFilter("selectedEvent", e.target.value)}
+            className="w-full p-2 border rounded-md text-sm"
+          >
+            <option value="">すべて表示</option>
+            {allEvents.map((event) => (
+              <option key={event} value={event}>
+                {event}
+              </option>
+            ))}
+          </select>
         </div>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-3">
-          {/* 検索テキストボックス */}
-          <div className="mb-4">
-            <input
-              type="text"
-              placeholder="名前・テーマ・所属で検索..."
-              value={searchText}
-              onChange={(e) => setSearchText(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
+      )}
 
-          {/* 研究分野フィルター */}
-          {renderFilterSection(
-            "研究分野",
-            "field",
-            fieldOptions
-          )}
+      <FilterSection
+        title="研究分野"
+        options={getUniqueValues(researchers, "field")}
+        selected={filters.fields}
+        mode={filters.fieldMode}
+        onSelectionChange={(v) => updateFilter("fields", v)}
+        onModeChange={(v) => updateFilter("fieldMode", v)}
+      />
 
-          {/* キーワードフィルター */}
-          {renderFilterSection(
-            "キーワード",
-            "keyword",
-            keywordOptions
-          )}
+      <FilterSection
+        title="キーワード"
+        options={getUniqueValues(researchers, "keywords")}
+        selected={filters.keywords}
+        mode={filters.keywordMode}
+        onSelectionChange={(v) => updateFilter("keywords", v)}
+        onModeChange={(v) => updateFilter("keywordMode", v)}
+      />
 
-          {/* 技術フィルター */}
-          {renderFilterSection(
-            "キーテクノロジー",
-            "keytechnology",
-            technologyOptions
-          )}
+      <FilterSection
+        title="キーテクノロジー"
+        options={getUniqueValues(researchers, "keytechnology")}
+        selected={filters.keytechnologies}
+        mode={filters.keytechnologyMode}
+        onSelectionChange={(v) => updateFilter("keytechnologies", v)}
+        onModeChange={(v) => updateFilter("keytechnologyMode", v)}
+      />
 
-          {/* プログラムフィルター */}
-          {renderFilterSection(
-            "化血研事業",
-            "program",
-            programOptions
-          )}
-
-          {/* 選択中のフィルター情報 - 折りたたまれている時に参照できるよう表示 */}
-          {totalSelectedFilters > 0 && (
-            <div className="mt-4 pt-3 border-t text-xs text-gray-600">
-              <div>選択中のフィルター: {totalSelectedFilters}項目</div>
-            </div>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+      <FilterSection
+        title="化血研事業"
+        options={getUniqueValues(researchers, "program")}
+        selected={filters.programs}
+        mode={filters.programMode}
+        onSelectionChange={(v) => updateFilter("programs", v)}
+        onModeChange={(v) => updateFilter("programMode", v)}
+      />
+    </div>
   );
 }
