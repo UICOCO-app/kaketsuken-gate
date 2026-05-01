@@ -42,7 +42,8 @@ export interface FilterState {
 
 export function splitByDelimiters(str: string): string[] {
   if (!str) return [];
-  return str
+  const cleaned = str.replace(/^["']|["']$/g, "").trim();
+  return cleaned
     .split(/[,、]/)
     .map((s) => s.trim())
     .filter(Boolean);
